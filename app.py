@@ -179,12 +179,12 @@ HTML_TEMPLATE = """
 LOGIN_TEMPLATE = """
 <!DOCTYPE html>
 <html>
-<head><title>Login - qlo.in</title></head>
+<head><title>Invite Only - QLO.in</title></head>
 <body>
-    <h2>Login Required</h2>
+    <h2>Invite Code Required</h2>
     <form method="post">
-        <input type="password" name="password" placeholder="Enter password" required />
-        <button type="submit">Login</button>
+        <input type="password" name="password" placeholder="Enter Invite Code" required />
+        <button type="submit">Enter</button>
     </form>
     {% if error %}<p style="color:red">{{ error }}</p>{% endif %}
 </body>
