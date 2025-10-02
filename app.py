@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, render_template_string, jsonify
+from flask import Flask, request, redirect, render_template_string, jsonify, session, url_for
 import json
 import string
 import random
@@ -6,11 +6,16 @@ import os
 from datetime import datetime
 
 app = Flask(__name__)
+app.secret_key = "super-secret-key"  # Required for session
+
+# Hardcoded password
+APP_PASSWORD = "ashokqlo"
+
 # Use /data for persistent storage, fallback to local file
 DATA_FILE = os.getenv('DATA_FILE', '/data/urls.json')
 REPO_FILE = 'urls.json'  # Template file in repo
 
-# HTML Template
+# HTML Template (homepage)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -39,11 +44,7 @@ HTML_TEMPLATE = """
         }
         h1 { color: #667eea; margin-bottom: 10px; font-size: 2.5em; }
         .subtitle { color: #666; margin-bottom: 30px; }
-        .input-group {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
+        .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
         input[type="text"], input[type="url"] {
             flex: 1;
             padding: 15px;
@@ -52,10 +53,7 @@ HTML_TEMPLATE = """
             font-size: 16px;
             transition: border-color 0.3s;
         }
-        input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
+        input:focus { outline: none; border-color: #667eea; }
         button {
             padding: 15px 30px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -69,51 +67,23 @@ HTML_TEMPLATE = """
         }
         button:hover { transform: translateY(-2px); }
         button:active { transform: translateY(0); }
-        .result {
-            display: none;
-            margin-top: 20px;
-            padding: 20px;
-            background: #f0f4ff;
-            border-radius: 10px;
-            border-left: 4px solid #667eea;
-        }
+        .result { display: none; margin-top: 20px; padding: 20px; background: #f0f4ff; border-radius: 10px; border-left: 4px solid #667eea; }
         .result.show { display: block; }
-        .short-url {
-            font-size: 1.2em;
-            color: #667eea;
-            font-weight: 600;
-            word-break: break-all;
-            margin: 10px 0;
-        }
-        .copy-btn {
-            padding: 8px 16px;
-            font-size: 14px;
-            margin-top: 10px;
-        }
-        .error {
-            color: #dc3545;
-            margin-top: 10px;
-            display: none;
-        }
-        .stats {
-            margin-top: 30px;
-            padding-top: 30px;
-            border-top: 2px solid #e0e0e0;
-        }
-        .stat-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            color: #666;
-        }
-        .stat-value {
-            font-weight: 600;
-            color: #667eea;
-        }
+        .short-url { font-size: 1.2em; color: #667eea; font-weight: 600; word-break: break-all; margin: 10px 0; }
+        .copy-btn { padding: 8px 16px; font-size: 14px; margin-top: 10px; }
+        .error { color: #dc3545; margin-top: 10px; display: none; }
+        .stats { margin-top: 30px; padding-top: 30px; border-top: 2px solid #e0e0e0; }
+        .stat-item { display: flex; justify-content: space-between; padding: 10px 0; color: #666; }
+        .stat-value { font-weight: 600; color: #667eea; }
+        .logout { text-align: right; margin-bottom: 10px; }
+        .logout a { color:#667eea; font-weight:bold; text-decoration:none; }
     </style>
 </head>
 <body>
     <div class="container">
+        <div class="logout">
+            <a href="/logout">Logout</a>
+        </div>
         <h1>qlo.in</h1>
         <p class="subtitle">Shorten your URLs instantly</p>
         
@@ -154,10 +124,7 @@ HTML_TEMPLATE = """
             const resultDiv = document.getElementById('result');
             const errorDiv = document.getElementById('error');
             
-            if (!url) {
-                showError('Please enter a URL');
-                return;
-            }
+            if (!url) { showError('Please enter a URL'); return; }
             
             try {
                 const response = await fetch('/api/shorten', {
@@ -167,18 +134,13 @@ HTML_TEMPLATE = """
                 });
                 
                 const data = await response.json();
-                
                 if (response.ok) {
                     document.getElementById('shortUrl').textContent = data.short_url;
                     resultDiv.classList.add('show');
                     errorDiv.style.display = 'none';
                     updateStats();
-                } else {
-                    showError(data.error || 'Failed to shorten URL');
-                }
-            } catch (error) {
-                showError('Network error. Please try again.');
-            }
+                } else { showError(data.error || 'Failed to shorten URL'); }
+            } catch (error) { showError('Network error. Please try again.'); }
         }
         
         function copyUrl() {
@@ -204,36 +166,47 @@ HTML_TEMPLATE = """
                 const data = await response.json();
                 document.getElementById('totalUrls').textContent = data.total_urls;
                 document.getElementById('totalClicks').textContent = data.total_clicks;
-            } catch (error) {
-                console.error('Failed to update stats');
-            }
+            } catch (error) { console.error('Failed to update stats'); }
         }
         
-        document.getElementById('urlInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') shortenUrl();
-        });
+        document.getElementById('urlInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') shortenUrl(); });
     </script>
 </body>
 </html>
 """
 
+# Login template
+LOGIN_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head><title>Login - qlo.in</title></head>
+<body>
+    <h2>Login Required</h2>
+    <form method="post">
+        <input type="password" name="password" placeholder="Enter password" required />
+        <button type="submit">Login</button>
+    </form>
+    {% if error %}<p style="color:red">{{ error }}</p>{% endif %}
+</body>
+</html>
+"""
+
+# ----------------------
+# File handling functions
+# ----------------------
 def init_data_file():
-    """Initialize the JSON data file if it doesn't exist"""
     os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
     if not os.path.exists(DATA_FILE):
-        # Copy from repo template if it exists
         if os.path.exists(REPO_FILE):
             import shutil
             shutil.copy(REPO_FILE, DATA_FILE)
             print(f"Initialized {DATA_FILE} from {REPO_FILE}")
         else:
-            # Create empty file
             with open(DATA_FILE, 'w') as f:
                 json.dump({}, f)
             print(f"Created new {DATA_FILE}")
 
 def read_data():
-    """Read all URL data from JSON file"""
     try:
         with open(DATA_FILE, 'r') as f:
             return json.load(f)
@@ -241,18 +214,35 @@ def read_data():
         return {}
 
 def write_data(data):
-    """Write URL data to JSON file"""
     with open(DATA_FILE, 'w') as f:
         json.dump(data, f, indent=2)
 
 def generate_short_code(length=6):
-    """Generate a random short code"""
     chars = string.ascii_letters + string.digits
     return ''.join(random.choice(chars) for _ in range(length))
 
+# ----------------------
+# Routes
+# ----------------------
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        if request.form['password'] == APP_PASSWORD:
+            session['logged_in'] = True
+            return redirect(url_for('index'))
+        return render_template_string(LOGIN_TEMPLATE, error="Invalid password")
+    return render_template_string(LOGIN_TEMPLATE, error=None)
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
 @app.route('/')
 def index():
-    """Home page with URL shortener interface"""
+    if not session.get('logged_in'):
+        return redirect(url_for('login'))
+
     data = read_data()
     total_urls = len(data)
     total_clicks = sum(url_data.get('clicks', 0) for url_data in data.values())
@@ -260,41 +250,31 @@ def index():
 
 @app.route('/api/shorten', methods=['POST'])
 def shorten():
-    """API endpoint to create a shortened URL"""
     request_data = request.json
     original_url = request_data.get('url')
     custom_code = request_data.get('custom_code', '').strip()
     
     if not original_url:
         return jsonify({'error': 'URL is required'}), 400
-    
-    # Add https:// if not present
     if not original_url.startswith(('http://', 'https://')):
         original_url = 'https://' + original_url
     
-    # Load existing data
     data = read_data()
     
-    # Handle custom code
     if custom_code:
         if len(custom_code) < 3 or len(custom_code) > 20:
             return jsonify({'error': 'Custom code must be 3-20 characters'}), 400
-        
         if not custom_code.replace('_', '').replace('-', '').isalnum():
             return jsonify({'error': 'Custom code can only contain letters, numbers, hyphens, and underscores'}), 400
-        
         if custom_code in data:
             return jsonify({'error': 'Custom code already taken'}), 400
-        
         short_code = custom_code
     else:
-        # Generate random code
         while True:
             short_code = generate_short_code()
             if short_code not in data:
                 break
     
-    # Save the URL data
     data[short_code] = {
         'url': original_url,
         'clicks': 0,
@@ -307,21 +287,15 @@ def shorten():
 
 @app.route('/<short_code>')
 def redirect_to_url(short_code):
-    """Redirect short code to original URL"""
     data = read_data()
-    
     if short_code in data:
-        # Increment click counter
         data[short_code]['clicks'] = data[short_code].get('clicks', 0) + 1
         write_data(data)
-        
         return redirect(data[short_code]['url'])
-    
     return "URL not found", 404
 
 @app.route('/api/stats')
 def stats():
-    """Get statistics about URLs"""
     data = read_data()
     total_urls = len(data)
     total_clicks = sum(url_data.get('clicks', 0) for url_data in data.values())
@@ -329,7 +303,6 @@ def stats():
 
 @app.route('/api/list')
 def list_urls():
-    """List all URLs (for personal use)"""
     data = read_data()
     urls = []
     for code, info in data.items():
@@ -341,6 +314,9 @@ def list_urls():
         })
     return jsonify(urls)
 
+# ----------------------
+# Main
+# ----------------------
 if __name__ == '__main__':
     init_data_file()
     port = int(os.getenv('PORT', 10000))
