@@ -1,6 +1,6 @@
 # qlo.in URL Shortener
 
-A simple, fast URL shortener that you can deploy using Docker
+A simple, fast URL shortener that you can deploy on Render.com using Docker.
 
 ## Features
 
@@ -13,18 +13,23 @@ A simple, fast URL shortener that you can deploy using Docker
 
 ## Files Needed
 
-Create these 3 files in your project directory:
+Create these 4 files in your project directory:
 
 1. **app.py** - The main Flask application
 2. **Dockerfile** - Docker configuration
 3. **requirements.txt** - Python dependencies
+4. **urls.json** - Initial data file (can be empty: `{}`)
 
 ## Deploy to Render.com
 
 ### Step 1: Prepare Your Repository
 
 1. Create a new GitHub repository
-2. Add all three files (app.py, Dockerfile, requirements.txt)
+2. Add all four files:
+   - `app.py` - Main application
+   - `Dockerfile` - Docker config
+   - `requirements.txt` - Dependencies
+   - `urls.json` - Data template (can be empty `{}`)
 3. Commit and push to GitHub
 
 ### Step 2: Deploy on Render
@@ -104,7 +109,17 @@ docker run -p 10000:10000 -v $(pwd)/data:/data url-shortener
 
 ## File-Based Storage
 
-This app uses a simple JSON file (`/data/urls.json`) instead of a database. The file structure:
+This app uses a simple JSON file for storage:
+
+- **Template file**: `urls.json` (included in repo)
+- **Runtime file**: `/data/urls.json` (on Render disk)
+
+When the app starts, it copies `urls.json` from your repo to `/data/urls.json` if it doesn't exist. This means:
+- ✅ Your repo has a clean starting point
+- ✅ Runtime data is saved to persistent disk
+- ✅ Redeploying won't lose your URLs (they're on the disk)
+
+### File Structure:
 
 ```json
 {
@@ -211,6 +226,10 @@ CMD ["gunicorn", "--bind", "0.0.0.0:10000", "--workers", "2", "app:app"]
 
 ## Support
 
+For issues with:
+- **Render deployment**: Check [Render Docs](https://render.com/docs)
+- **DNS configuration**: Contact your domain registrar
+- **Application bugs**: Check application logs
 
 ## License
 

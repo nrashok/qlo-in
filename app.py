@@ -6,7 +6,9 @@ import os
 from datetime import datetime
 
 app = Flask(__name__)
+# Use /data for persistent storage, fallback to local file
 DATA_FILE = os.getenv('DATA_FILE', '/data/urls.json')
+REPO_FILE = 'urls.json'  # Template file in repo
 
 # HTML Template
 HTML_TEMPLATE = """
@@ -219,8 +221,16 @@ def init_data_file():
     """Initialize the JSON data file if it doesn't exist"""
     os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
     if not os.path.exists(DATA_FILE):
-        with open(DATA_FILE, 'w') as f:
-            json.dump({}, f)
+        # Copy from repo template if it exists
+        if os.path.exists(REPO_FILE):
+            import shutil
+            shutil.copy(REPO_FILE, DATA_FILE)
+            print(f"Initialized {DATA_FILE} from {REPO_FILE}")
+        else:
+            # Create empty file
+            with open(DATA_FILE, 'w') as f:
+                json.dump({}, f)
+            print(f"Created new {DATA_FILE}")
 
 def read_data():
     """Read all URL data from JSON file"""
